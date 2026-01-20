@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ar">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pomodoro Timer</title>
+  <style>
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#ff6b6b;
+      --muted:#9aa4b2;
+      --glass: rgba(255,255,255,0.03);
+      --radius:16px;
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', 'Helvetica Neue', Arial;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;}
+    body{
+      margin:0; 
+      background: radial-gradient(1000px 600px at 10% 10%, rgba(255,107,107,0.06), transparent),
+                  linear-gradient(180deg,#071021 0%, #081226 100%);
+      color:#e6eef6; 
+      display:flex; 
+      align-items:center; 
+      justify-content:center; 
+      padding:24px;
+      direction:rtl;
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius:var(--radius);
+      padding:28px;
+      width:100%;
+      max-width:420px;
+      box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+      border:1px solid rgba(255,255,255,0.03);
+    }
+    h1{font-size:20px;margin:0 0 10px 0;}
+    .timer-wrap{display:flex;flex-direction:column;align-items:center;gap:14px}
+    .circle{
+      width:230px;height:230px;border-radius:50%;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      display:flex;align-items:center;justify-content:center;position:relative;
+      box-shadow: inset 0 -8px 30px rgba(0,0,0,0.6);
+    }
+    .time{font-size:36px;font-weight:600}
+    .label{font-size:12px;color:var(--muted);margin-top:6px}
+    .controls{display:flex;gap:8px;margin-top:12px}
+    button{background:var(--glass);border:1px solid rgba(255,255,255,0.04);padding:10px 14px;border-radius:10px;color:inherit;cursor:pointer}
+    button.primary{background:linear-gradient(90deg,#ff8b8b,var(--accent));color:#091020;border:none;font-weight:700}
+    .settings{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-top:14px}
+    .setting{display:flex;flex-direction:column;align-items:center;gap:6px}
+    .setting input[type=number]{width:68px;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;text-align:center}
+    .mode-toggle{display:flex;gap:6px}
+    .mode-btn{padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);cursor:pointer}
+    .progress-ring{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+    .small{font-size:13px;color:var(--muted)}
+    footer{margin-top:14px;text-align:center;color:var(--muted);font-size:12px}
+    @media(max-width:420px){.circle{width:200px;height:200px}.time{font-size:30px}}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>Pomodoro Timer بسيط</h1>
+    <div class="timer-wrap">
+      <div class="circle" role="timer" aria-live="polite">
+        <svg class="progress-ring" width="230" height="230" viewBox="0 0 120 120">
+          <defs></defs>
+          <circle cx="60" cy="60" r="54" stroke="rgba(255,255,255,0.06)" stroke-width="12" fill="none"></circle>
+          <circle id="progress" cx="60" cy="60" r="54" stroke-width="12" stroke-linecap="round" fill="none" transform="rotate(-90 60 60)"></circle>
+        </svg>
+        <div style="text-align:center">
+          <div class="time" id="time">25:00</div>
+          <div class="label" id="modeLabel">Work</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="startBtn" class="primary">ابدأ</button>
+        <button id="pauseBtn">توقيف مؤقت</button>
+        <button id="resetBtn">إعادة</button>
+      </div>
+
+      <div class="settings">
+        <div class="setting">
+          <label class="small">مدة التركيز (دقائق)</label>
+          <input type="number" id="workInput" min="1" max="120" value="25">
+        </div>
+        <div class="setting">
+          <label class="small">مدة الراحة (دقائق)</label>
+          <input type="number" id="breakInput" min="1" max="60" value="5">
+        </div>
+        <div class="setting">
+          <label class="small">الجولات</label>
+          <input type="number" id="cyclesInput" min="1" max="12" value="4">
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;width:100%;margin-top:10px;align-items:center">
+        <div class="small">الجولة: <span id="cycleDisplay">0 / 4</span></div>
+        <div class="small">الحالة: <span id="status">متوقف</span></div>
+      </div>
+
+    </div>
+    <footer>صغير وبسيط — لو عايزة إشعارات سطح المكتب أو ثيم أبيض قولي.</footer>
+  </main>
+
+  <audio id="beep">
+    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YRAAAAAA" type="audio/wav">
+  </audio>
+
+  <script>
+    // عناصر الصفحة
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const timeEl = document.getElementById('time');
+    const modeLabel = document.getElementById('modeLabel');
+    const workInput = document.getElementById('workInput');
+    const breakInput = document.getElementById('breakInput');
+    const cyclesInput = document.getElementById('cyclesInput');
+    const cycleDisplay = document.getElementById('cycleDisplay');
+    const statusEl = document.getElementById('status');
+    const progress = document.getElementById('progress');
+    const beep = document.getElementById('beep');
+
+    // حالة التطبيق
+    let workSeconds = +workInput.value * 60;
+    let breakSeconds = +breakInput.value * 60;
+    let totalCycles = +cyclesInput.value;
+    let currentCycle = 0;
+    let mode = 'work'; // 'work' or 'break'
+    let remaining = workSeconds;
+    let timer = null;
+    let running = false;
+
+    // إعداد الدائرة التقدمية (SVG circle)
+    const R = 54;
+    const CIRC = 2 * Math.PI * R;
+    progress.setAttribute('stroke', 'url(#)');
+    progress.style.stroke = 'linear-gradient(90deg,#ff8b8b,#ff6b6b)';
+    progress.setAttribute('stroke-dasharray', CIRC);
+    progress.setAttribute('stroke-dashoffset', CIRC);
+
+    function updateInputs(){
+      workSeconds = Math.max(1, +workInput.value) * 60;
+      breakSeconds = Math.max(1, +breakInput.value) * 60;
+      totalCycles = Math.max(1, +cyclesInput.value);
+      cycleDisplay.textContent = `${currentCycle} / ${totalCycles}`;
+    }
+
+    function formatTime(s){
+      const mm = Math.floor(s/60).toString().padStart(2,'0');
+      const ss = (s%60).toString().padStart(2,'0');
+      return `${mm}:${ss}`;
+    }
+
+    function setMode(newMode){
+      mode = newMode;
+      modeLabel.textContent = (mode === 'work') ? 'Work' : 'Break';
+      remaining = (mode === 'work') ? workSeconds : breakSeconds;
+      statusEl.textContent = running ? 'يعمل' : 'متوقف';
+      updateDisplay();
+    }
+
+    function updateDisplay(){
+      timeEl.textContent = formatTime(remaining);
+      cycleDisplay.textContent = `${currentCycle} / ${totalCycles}`;
+      // تحديث الدائرة
+      const total = (mode === 'work') ? workSeconds : breakSeconds;
+      const frac = 1 - (remaining / total);
+      const offset = CIRC * (1 - frac);
+      progress.setAttribute('stroke-dashoffset', offset);
+    }
+
+    function tick(){
+      if(remaining > 0){
+        remaining -= 1;
+        updateDisplay();
+      } else {
+        // انتهاء الفترة
+        beep.play().catch(()=>{});
+        if(mode === 'work'){
+          // انتقل للراحة
+          setMode('break');
+        } else {
+          // انتهت الراحة -> انتهت جولة كاملة
+          currentCycle += 1;
+          updateInputs();
+          if(currentCycle >= totalCycles){
+            stopTimer();
+            statusEl.textContent = 'منتهية جميع الجولات';
+            return;
+          }
+          setMode('work');
+        }
+      }
+    }
+
+    function startTimer(){
+      if(running) return;
+      running = true;
+      statusEl.textContent = 'يعمل';
+      if(!timer) timer = setInterval(tick, 1000);
+    }
+    function pauseTimer(){
+      running = false;
+      statusEl.textContent = 'موقوف مؤقتًا';
+      if(timer){ clearInterval(timer); timer = null; }
+    }
+    function stopTimer(){
+      running = false;
+      if(timer){ clearInterval(timer); timer = null; }
+      currentCycle = 0;
+      updateInputs();
+      setMode('work');
+    }
+
+    // الأحداث
+    startBtn.addEventListener('click', ()=>{
+      // إذا كان الوقت صفر، أعد تعيين
+      if(remaining <= 0) remaining = (mode==='work')?workSeconds:breakSeconds;
+      startTimer();
+    });
+    pauseBtn.addEventListener('click', ()=>{
+      pauseTimer();
+    });
+    resetBtn.addEventListener('click', ()=>{
+      stopTimer();
+    });
+
+    [workInput, breakInput, cyclesInput].forEach(el=>{
+      el.addEventListener('change', ()=>{
+        updateInputs();
+        // لو مش شغال يحدث الوقت المعروض
+        if(!running) setMode('work');
+      })
+    });
+
+    // تهيئة
+    updateInputs();
+    setMode('work');
+
+    // اختصار لوحة مفاتيح: Space للتشغيل/الإيقاف
+    window.addEventListener('keydown', (e)=>{
+      if(e.code === 'Space'){
+        e.preventDefault();
+        if(running) pauseTimer(); else startTimer();
+      }
+    });
+
+    // ملاحظة: ملف الصوت صغير جدًا ومش مهيمّن (بايتس قليلة)
+  </script>
+</body>
+</html>
